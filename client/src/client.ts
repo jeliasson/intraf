@@ -8,6 +8,16 @@ import {
   type ClientId,
   isClientIdMessage,
 } from "../../common/src/types.ts";
+import { Logger, getLogLevelFromArgs } from "../../common/src/logger.ts";
+
+// Initialize logger with log level from CLI args
+const logLevel = getLogLevelFromArgs();
+const logger = new Logger("CLIENT", logLevel);
+
+logger.info(`Starting client with log level: ${logger.getLevelName()}`);
+
+// Delay connection by 1 second
+await new Promise(resolve => setTimeout(resolve, 1000));
 
 // Connect to WebSocket server
 const ws = new WebSocket("ws://127.0.0.1:8000");
@@ -23,19 +33,19 @@ let awaitingPong = false;
 function startHeartbeat() {
   heartbeatTimer = setInterval(() => {
     if (awaitingPong) {
-      console.warn("No pong received, connection may be lost");
+      logger.warn("No pong received, connection may be lost");
       ws.close();
       return;
     }
     
-    console.log("Sending ping...");
+    logger.debug("Sending ping...");
     ws.send(HEARTBEAT_PING);
     awaitingPong = true;
     
     // Set timeout for pong response
     heartbeatTimeoutTimer = setTimeout(() => {
       if (awaitingPong) {
-        console.error("Heartbeat timeout - no pong received");
+        logger.error("Heartbeat timeout - no pong received");
         ws.close();
       }
     }, HEARTBEAT_TIMEOUT);
@@ -55,7 +65,7 @@ function stopHeartbeat() {
 
 // Fired when connection opens
 ws.onopen = () => {
-  console.log("Connected! Waiting for server to assign ID...");
+  logger.info("Connected! Waiting for server to assign ID...");
 };
 
 // Fired when a message is received
@@ -65,7 +75,7 @@ ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     if (isClientIdMessage(data)) {
       clientId = data.id;
-      console.log(`Assigned Client ID: ${clientId}`);
+      logger.info(`Assigned Client ID: ${clientId}`);
       // Start heartbeat after receiving ID
       ws.send("Hello from Deno!");
       startHeartbeat();
@@ -75,11 +85,11 @@ ws.onmessage = (event) => {
     // Not JSON, handle as regular message
   }
   
-  console.log("Received:", event.data);
+  logger.info("Received:", event.data);
   
   // Handle pong response
   if (event.data === HEARTBEAT_PONG) {
-    console.log("Received pong");
+    logger.debug("Received pong");
     awaitingPong = false;
     if (heartbeatTimeoutTimer) {
       clearTimeout(heartbeatTimeoutTimer);
@@ -90,11 +100,11 @@ ws.onmessage = (event) => {
 
 // Fired if an error occurs
 ws.onerror = (err) => {
-  console.error("WebSocket error:", err);
+  logger.error("WebSocket error:", err);
 };
 
 // Fired when connection closes
 ws.onclose = () => {
-  console.log("Connection closed.");
+  logger.info("Connection closed.");
   stopHeartbeat();
 };

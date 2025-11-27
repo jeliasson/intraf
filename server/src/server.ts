@@ -10,6 +10,13 @@ import {
   type ClientId,
   type ClientIdMessage,
 } from "../../common/src/types.ts";
+import { Logger, getLogLevelFromArgs } from "../../common/src/logger.ts";
+
+// Initialize logger with log level from CLI args
+const logLevel = getLogLevelFromArgs();
+const serverLogger = new Logger("SERVER", logLevel);
+
+serverLogger.info(`Starting server with log level: ${serverLogger.getLevelName()}`);
 
 Deno.serve((req) => {
 
@@ -22,6 +29,9 @@ Deno.serve((req) => {
   // Generate unique client ID upon connection
   const clientId: ClientId = generateClientId();
   
+  // Create a logger for this connection
+  const logger = new Logger(clientId, logLevel);
+  
   // Track last heartbeat time
   let lastHeartbeat = Date.now();
 
@@ -29,14 +39,14 @@ Deno.serve((req) => {
   const heartbeatCheck = setInterval(() => {
     const timeSinceLastHeartbeat = Date.now() - lastHeartbeat;
     if (timeSinceLastHeartbeat > SERVER_HEARTBEAT_TIMEOUT) {
-      console.log(`[${clientId}] Client heartbeat timeout, closing connection`);
+      logger.warn("Client heartbeat timeout, closing connection");
       clearInterval(heartbeatCheck);
       socket.close();
     }
   }, HEARTBEAT_CHECK_INTERVAL);
 
   socket.addEventListener("open", () => {
-    console.log(`[${clientId}] Client connected`);
+    logger.info("Client connected");
     // Send the assigned client ID to the client
     const message: ClientIdMessage = {
       type: MessageType.CLIENT_ID,
@@ -47,14 +57,14 @@ Deno.serve((req) => {
 
   socket.addEventListener("message", (event: MessageEvent) => {
     if (event.data === HEARTBEAT_PING) {
-      console.log(`[${clientId}] Received ping, sending pong`);
+      logger.debug("Received ping, sending pong");
       lastHeartbeat = Date.now();
       socket.send(HEARTBEAT_PONG);
     }
   });
 
   socket.addEventListener("close", () => {
-    console.log(`[${clientId}] Client disconnected`);
+    logger.info("Client disconnected");
     clearInterval(heartbeatCheck);
   });
 
@@ -63,7 +73,7 @@ Deno.serve((req) => {
     // The close event will handle cleanup, so we only log unexpected errors
     const errorEvent = err as ErrorEvent;
     if (errorEvent.message && errorEvent.message !== "Unexpected EOF") {
-      console.error(`[${clientId}] WebSocket error:`, errorEvent.message);
+      logger.error("WebSocket error:", errorEvent.message);
     }
     // Don't clear interval here - let close event handle it to avoid double-cleanup
   });

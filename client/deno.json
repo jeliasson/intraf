@@ -1,6 +1,7 @@
 {
   "tasks": {
     "dev": "deno run --allow-net --watch src/client.ts",
+    "dev:debug": "deno run --allow-net --watch src/client.ts --log-level=debug",
     "run": "deno run --allow-net src/client.ts"
   },
   "imports": {
