@@ -8,24 +8,14 @@ dev:
 
 # Development mode with watch
 client-dev:
-	@deno run \
-		--allow-net \
-		--watch \
-		./client/src/client.ts
+	@cd client && deno task dev
 
 server-dev:
-	@deno run \
-		--allow-net \
-		--watch \
-		./server/src/server.ts
+	@cd server && deno task dev
 
 # Run without watch (production)
 client-run:
-	@deno run \
-		--allow-net \
-		./client/src/client.ts
+	@cd client && deno task run
 
 server-run:
-	@deno run \
-		--allow-net \
-		./server/src/server.ts
+	@cd server && deno task run
