@@ -1,6 +1,66 @@
 # intraf
 An open-source tunneling service
 
+## Configuration
+
+Intraf uses a flexible configuration system that supports multiple sources with the following precedence (highest to lowest):
+
+1. **CLI Arguments** (highest priority)
+2. **Environment Variables**
+3. **Config File** (lowest priority)
+
+### Config File
+
+Both client and server look for an `intraf.yaml` file in their respective directories. A warning will be logged if the file is not found.
+
+Example `intraf.yaml`:
+
+```yaml
+# Server configuration
+server:
+  host: 0.0.0.0
+  port: 8000
+
+# Client configuration
+client:
+  serverUrl: ws://127.0.0.1:8000
+  reconnectDelay: 1000
+
+# Common configuration
+logLevel: info
+```
+
+### Environment Variables
+
+All environment variables are prefixed with `INTRAF_`:
+
+```bash
+# Server settings
+export INTRAF_SERVER_HOST=0.0.0.0
+export INTRAF_SERVER_PORT=8000
+
+# Client settings
+export INTRAF_CLIENT_SERVER_URL=ws://127.0.0.1:8000
+export INTRAF_CLIENT_RECONNECT_DELAY=1000
+
+# Common settings
+export INTRAF_LOG_LEVEL=debug
+```
+
+### CLI Arguments
+
+```bash
+# Server
+deno task dev --server-host=0.0.0.0 --server-port=8000 --log-level=debug
+
+# Client
+deno task dev --server=ws://127.0.0.1:8000 --reconnect-delay=1000 --log-level=debug
+```
+
+### Configuration Debug
+
+When running with `--log-level=debug`, you'll see a detailed breakdown of all configuration sources and the final resolved values.
+
 ## Development
 
 ### Running the project

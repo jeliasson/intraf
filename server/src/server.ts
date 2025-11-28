@@ -1,15 +1,22 @@
 import { generateClientId } from "../../common/src/websocket.ts";
 import { Logger } from "../../common/src/cli/logger.ts";
-import { getLogLevelFromArgs } from "../../common/src/cli/cli.ts";
+import { loadConfig } from "../../common/src/config.ts";
 import { WebSocketEventHandler } from "./ws/events.ts";
 
-// Initialize logger with log level from CLI args
-const logLevel = getLogLevelFromArgs();
-const serverLogger = new Logger("SERVER", logLevel);
+// Initialize temporary logger for config loading
+const tempLogger = new Logger("SERVER");
+
+// Load configuration
+const config = await loadConfig("./intraf.yaml", tempLogger);
+
+// Re-initialize logger with configured log level
+const serverLogger = new Logger("SERVER", config.logLevel);
 
 serverLogger.info(`Starting server with log level: ${serverLogger.getLevelName()}`);
 
 Deno.serve({
+  hostname: config.serverHost,
+  port: config.serverPort,
   onListen: ({ hostname, port }) => {
     serverLogger.info(`Listening on http://${hostname}:${port}/`);
   },
@@ -24,7 +31,7 @@ Deno.serve({
   const clientId = generateClientId();
   
   // Create a logger for this connection
-  const logger = new Logger(clientId, logLevel);
+  const logger = new Logger(clientId, config.logLevel);
   
   // Create event handler for this connection
   const events = new WebSocketEventHandler(socket, logger, clientId);

@@ -1,18 +1,23 @@
 import { Logger } from "../../common/src/cli/logger.ts";
-import { getLogLevelFromArgs } from "../../common/src/cli/cli.ts";
+import { loadConfig } from "../../common/src/config.ts";
 import { WebSocketEventHandler } from "./ws/events.ts";
 
-// Initialize logger with log level from CLI args
-const logLevel = getLogLevelFromArgs();
-const logger = new Logger("CLIENT", logLevel);
+// Initialize temporary logger for config loading
+const tempLogger = new Logger("CLIENT");
+
+// Load configuration
+const config = await loadConfig("./intraf.yaml", tempLogger);
+
+// Re-initialize logger with configured log level
+const logger = new Logger("CLIENT", config.logLevel);
 
 logger.info(`Starting client with log level: ${logger.getLevelName()}`);
 
-// Delay connection by 1 second
-await new Promise(resolve => setTimeout(resolve, 1000));
+// Delay connection by configured reconnect delay
+await new Promise(resolve => setTimeout(resolve, config.clientReconnectDelay));
 
 // Connect to WebSocket server
-const ws = new WebSocket("ws://127.0.0.1:8000");
+const ws = new WebSocket(config.clientServerUrl);
 
 // Create event handler for this connection
 const events = new WebSocketEventHandler(ws, logger);
