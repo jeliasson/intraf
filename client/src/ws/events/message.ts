@@ -1,4 +1,4 @@
-import type { Logger } from "../../../../common/src/logger.ts";
+import type { Logger } from "../../../../common/src/cli/logger.ts";
 import { type ClientId, isClientIdMessage } from "../../../../common/src/types.ts";
 import { HEARTBEAT_PONG } from "../../../../common/src/websocket.ts";
 import type { HeartbeatContext } from "../heartbeat.ts";

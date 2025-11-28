@@ -1,5 +1,6 @@
 import { generateClientId } from "../../common/src/websocket.ts";
-import { Logger, getLogLevelFromArgs } from "../../common/src/logger.ts";
+import { Logger } from "../../common/src/cli/logger.ts";
+import { getLogLevelFromArgs } from "../../common/src/cli/cli.ts";
 import { WebSocketEventHandler } from "./ws/events.ts";
 
 // Initialize logger with log level from CLI args
@@ -8,7 +9,11 @@ const serverLogger = new Logger("SERVER", logLevel);
 
 serverLogger.info(`Starting server with log level: ${serverLogger.getLevelName()}`);
 
-Deno.serve((req) => {
+Deno.serve({
+  onListen: ({ hostname, port }) => {
+    serverLogger.info(`Listening on http://${hostname}:${port}/`);
+  },
+}, (req) => {
   if (req.headers.get("upgrade") != "websocket") {
     return new Response(null, { status: 426 });
   }

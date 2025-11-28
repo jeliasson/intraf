@@ -1,4 +1,4 @@
-import type { Logger } from "../../../../common/src/logger.ts";
+import type { Logger } from "../../../../common/src/cli/logger.ts";
 import type { HeartbeatContext } from "../heartbeat.ts";
 import { stopHeartbeat } from "../heartbeat.ts";
 

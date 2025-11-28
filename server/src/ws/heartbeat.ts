@@ -1,4 +1,4 @@
-import type { Logger } from "../../../common/src/logger.ts";
+import type { Logger } from "../../../common/src/cli/logger.ts";
 import {
   HEARTBEAT_CHECK_INTERVAL,
   SERVER_HEARTBEAT_TIMEOUT,

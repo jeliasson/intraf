@@ -1,4 +1,5 @@
-import { Logger, getLogLevelFromArgs } from "../../common/src/logger.ts";
+import { Logger } from "../../common/src/cli/logger.ts";
+import { getLogLevelFromArgs } from "../../common/src/cli/cli.ts";
 import { WebSocketEventHandler } from "./ws/events.ts";
 
 // Initialize logger with log level from CLI args

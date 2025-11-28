@@ -1,4 +1,4 @@
-import type { Logger } from "../../../../common/src/logger.ts";
+import type { Logger } from "../../../../common/src/cli/logger.ts";
 import { HEARTBEAT_PING, HEARTBEAT_PONG } from "../../../../common/src/websocket.ts";
 import type { HeartbeatContext } from "../heartbeat.ts";
 import { updateHeartbeat } from "../heartbeat.ts";
