@@ -1,7 +1,6 @@
 {
   "tasks": {
-    "dev": "deno run --allow-env=\"INTRAF_*\" --allow-read --allow-net --watch src/server.ts",
-    "dev:debug": "deno run --allow-env=\"INTRAF_*\" --allow-read --allow-net --watch src/server.ts --log-level=debug",
+    "dev": "deno run --allow-env=\"INTRAF_*\" --allow-read=intraf.yaml --allow-net --watch src/server.ts",
     "run": "deno run --allow-net src/server.ts"
   },
   "imports": {
