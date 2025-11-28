@@ -10,8 +10,14 @@ dev:
 client-dev:
 	@cd client && deno task dev
 
+client-dev-debug:
+	@cd client && deno task dev:debug
+
 server-dev:
 	@cd server && deno task dev
+
+server-dev-debug:
+	@cd server && deno task dev:debug
 
 # Run without watch (production)
 client-run:
