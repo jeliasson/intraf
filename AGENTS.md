@@ -7,7 +7,7 @@ This document provides AI agents with context about the **intraf** project archi
 **intraf** is an open-source tunneling service built with Deno and WebSockets. The project consists of:
 
 - **Server**: WebSocket server that accepts client connections and manages tunneling
-- **Client**: WebSocket client that connects to the server
+- **Client**: WebSocket client with automatic reconnection that connects to the server
 - **Common**: Shared code (types, configuration, utilities) used by both server and client
 
 ## Technology Stack

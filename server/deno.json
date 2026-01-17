@@ -1,7 +1,7 @@
 {
   "tasks": {
     "dev": "deno run --allow-env=\"INTRAF_*\" --allow-read=intraf.yaml --allow-net --watch src/server.ts",
-    "run": "deno run --allow-net src/server.ts"
+    "run": "deno run --allow-env=\"INTRAF_*\" --allow-read=intraf.yaml --allow-net src/server.ts"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@1"

@@ -4,3 +4,7 @@ server:
 
 log:
   level: info
+
+auth:
+  enabled: true
+  secret: change-me-in-production

@@ -9,10 +9,10 @@ dev:
 
 # Development mode with watch
 client-dev:
-	@cd client && deno task dev
+	@cd client && clear && deno task dev
 
 server-dev:
-	@cd server && deno task dev
+	@cd server && clear && deno task dev
 
 # Run without watch (production)
 client-run:

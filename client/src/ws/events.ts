@@ -11,6 +11,7 @@ export class WebSocketEventHandler {
   private logger: Logger;
   private clientId: ClientId | null = null;
   private heartbeatContext: HeartbeatContext | null = null;
+  private loginInProgress: boolean = false;
 
   constructor(socket: WebSocket, logger: Logger) {
     this.socket = socket;
@@ -21,22 +22,24 @@ export class WebSocketEventHandler {
     handleOpen({ logger: this.logger });
   }
 
-  onMessage(event: MessageEvent): void {
+  onMessage(event: MessageEvent): Promise<void> {
     const context = {
       clientId: this.clientId,
       heartbeatContext: this.heartbeatContext,
+      loginInProgress: this.loginInProgress,
     };
     
-    handleMessage({
+    return handleMessage({
       event,
       socket: this.socket,
       logger: this.logger,
       context,
+    }).then(() => {
+      // Update our local references
+      this.clientId = context.clientId;
+      this.heartbeatContext = context.heartbeatContext;
+      this.loginInProgress = context.loginInProgress;
     });
-    
-    // Update our local references
-    this.clientId = context.clientId;
-    this.heartbeatContext = context.heartbeatContext;
   }
 
   onClose(): void {

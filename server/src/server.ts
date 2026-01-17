@@ -9,6 +9,13 @@ const serverSchema = {
     host: { default: "0.0.0.0", description: "Server host address" },
     port: { default: 8000, description: "Server port" },
   },
+  auth: {
+    enabled: { default: false, description: "Enable JWT authentication" },
+    secret: { 
+      default: "change-me-in-production", 
+      description: "JWT secret key for token signing/verification" 
+    },
+  },
   log: {
     level: { 
       default: parseLogLevel("info"),
@@ -49,10 +56,15 @@ Deno.serve({
   const logger = new Logger(clientId, config.log.level);
   
   // Create event handler for this connection
-  const events = new WebSocketEventHandler(socket, logger, clientId);
+  const events = new WebSocketEventHandler(
+    socket, 
+    logger, 
+    clientId,
+    { enabled: config.auth.enabled, secret: config.auth.secret }
+  );
 
   socket.addEventListener("open", () => events.onOpen());
-  socket.addEventListener("message", (event: MessageEvent) => events.onMessage(event));
+  socket.addEventListener("message", (event: MessageEvent) => void events.onMessage(event));
   socket.addEventListener("close", () => events.onClose());
   socket.addEventListener("error", (err: Event) => events.onError(err));
 
