@@ -1,5 +1,5 @@
 import type { Logger } from "../../../../common/src/cli/logger.ts";
-import { MessageType, type ClientIdMessage, type AuthRequestMessage } from "../../../../common/src/types.ts";
+import { MessageType, type ClientIdMessage } from "../../../../common/src/types.ts";
 import type { ClientId } from "../../../../common/src/types.ts";
 import { MSG_CLIENT_CONNECTED } from "../../../../common/src/constants.ts";
 import type { AuthContext } from "../events.ts";
@@ -24,12 +24,22 @@ export function handleOpen({ socket, logger, clientId, authContext }: OpenHandle
   };
   socket.send(JSON.stringify(clientIdMessage));
 
-  // If authentication is enabled, send auth request
+  // If authentication is enabled, send auth status
   if (authContext.enabled) {
-    logger.debug("Requesting authentication");
-    const authRequest: AuthRequestMessage = {
-      type: MessageType.AUTH_REQUEST,
+    logger.debug("Authentication is enabled");
+    const authStatus = {
+      type: "auth_status",
+      statusCode: 200,
+      message: "Authentication enabled but not yet implemented",
     };
-    socket.send(JSON.stringify(authRequest));
+    socket.send(JSON.stringify(authStatus));
+  } else {
+    // Send simple auth success for now
+    const authStatus = {
+      type: "auth_status",
+      statusCode: 200,
+      message: "Authentication disabled",
+    };
+    socket.send(JSON.stringify(authStatus));
   }
 }
