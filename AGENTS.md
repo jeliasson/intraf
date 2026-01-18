@@ -39,6 +39,9 @@ intraf/
 ├── client/           # WebSocket client
 │   ├── src/
 │   │   ├── client.ts              # Main client entry point
+│   │   ├── web/                   # Web dashboard server
+│   │   │   ├── server.ts          # HTTP server implementation
+│   │   │   └── types.ts           # Web server types
 │   │   └── ws/                    # WebSocket event handlers
 │   │       ├── events.ts          # Event handler coordinator
 │   │       ├── heartbeat.ts       # Client-side heartbeat pinging
@@ -294,16 +297,31 @@ export function generateClientId(): ClientId {
 
 ### Running the Project
 
+**User workflow (default ports):**
 ```bash
-# Run server only
+# Run server only (port 8000)
 make server-dev
 
-# Run client only
+# Run client only (connects to port 8000, web dashboard on port 3000)
 make client-dev
 
 # Run both with watch mode
 make dev
 ```
+
+**AI Agent workflow (alternative ports to avoid conflicts):**
+```bash
+# Server on port 8999
+cd server && deno task dev -- --server-port=8999
+
+# Client connecting to port 8999 with web dashboard on port 3999
+cd client && deno task dev -- --server-port=8999 --web-port=3999
+```
+
+This separation ensures that:
+- User can run their own server/client on default ports (8000/3000)
+- AI agents can test changes on alternative ports (8999/3999) without conflicts
+- Both can run simultaneously during development
 
 ### Deno Tasks
 
@@ -330,9 +348,79 @@ deno task run   # Production run
 - `--server-host` - Server host to connect to (default: 127.0.0.1)
 - `--server-port` - Server port to connect to (default: 8000)
 - `--server-reconnect-delay` - Initial connection delay in ms (default: 1000)
+- `--web-enabled` - Enable web dashboard server (default: true)
+- `--web-host` - Web dashboard host address (default: 127.0.0.1)
+- `--web-port` - Web dashboard port (default: 3000)
 - `--log-level` - Log level (default: info)
 
+### Web Dashboard
+
+The client includes a built-in web dashboard for monitoring and management:
+
+**Access:** `http://127.0.0.1:3000` (or custom port via `--web-port`)
+
+**Automatic Port Selection:**
+If the requested web port is already in use (e.g., when running multiple clients), the web server will automatically try the next available port (3001, 3002, etc.). This allows multiple clients to run simultaneously without manual port configuration.
+
+Example:
+- Client 1 with `--web-port=3000` → Uses port 3001 if 3000 is busy
+- Client 2 with `--web-port=3000` → Uses port 3002 if 3000 and 3001 are busy
+
+**Features:**
+- **Real-time connection status** - Shows connected/disconnected state with live updates
+- **Connection details** - Client ID, server URL, reconnect attempts, last connected time
+- **API endpoints:**
+  - `GET /` - Dashboard HTML page
+  - `GET /api/status` - JSON status endpoint (updates every 2 seconds)
+  - `GET /api/tunnels` - Tunnel management (placeholder for future implementation)
+- **Placeholders for future features:**
+  - Tunnel management UI
+  - Authentication/login system
+
+**Disabling the web dashboard:**
+```bash
+cd client && deno task dev -- --web-enabled=false
+```
+
 ## Common Tasks for AI Agents
+
+### Testing Changes
+
+When you make changes to the codebase, follow this testing workflow to avoid port conflicts with the user:
+
+**Step 1: Start the test server (port 8999)**
+```bash
+cd server && deno task dev -- --server-port=8999
+```
+
+**Step 2: Start the test client (connects to port 8999, web dashboard on port 3999)**
+```bash
+cd client && deno task dev -- --server-port=8999 --web-port=3999
+```
+
+**Step 3: Verify the connection**
+- Check server logs for client connection message
+- Check client logs for "Connected!" and "Assigned Client ID" messages
+- Test web dashboard: `curl http://127.0.0.1:3999/api/status`
+
+**Step 4: Clean up after testing**
+```bash
+# Kill ONLY the test server on port 8999 (be specific!)
+pkill -f "deno.*server.*--server-port=8999"
+
+# Kill ONLY the test client connecting to port 8999 (be specific!)
+pkill -f "deno.*client.*--server-port=8999"
+
+# Verify cleanup (should NOT show port 8000 or user processes)
+ps aux | grep deno | grep -E "(8999|3999)"
+```
+
+**Important:**
+- Always use ports 8999 (server) and 3999 (web dashboard) for testing
+- **NEVER** use `pkill -f "deno"` or `pkill -9 -f "deno"` - this kills the user's processes!
+- Be very specific in your kill commands to target ONLY test processes on port 8999
+- Always verify you only killed test processes, not user processes on ports 8000/3000
+- The user runs their own server/client on default ports (8000/3000)
 
 ### Adding a New Message Type
 
@@ -365,6 +453,41 @@ deno task run   # Production run
 3. Modify logic in `server/src/ws/heartbeat.ts` (server-side)
 4. Test with multiple clients and network conditions
 
+## Process Management for AI Agents
+
+**CRITICAL**: The user runs their own server and client processes on default ports (8000/3000). You must NEVER kill these processes.
+
+### Safe Process Cleanup
+
+**DO:**
+```bash
+# Kill only test server on port 8999
+pkill -f "deno.*server.*--server-port=8999"
+
+# Kill only test client on port 8999
+pkill -f "deno.*client.*--server-port=8999"
+```
+
+**NEVER DO:**
+```bash
+# ❌ WRONG - Kills user's processes too!
+pkill -f "deno"
+pkill -9 -f "deno"
+pkill -f "deno.*server"  # Too broad
+pkill -f "deno.*client"  # Too broad
+```
+
+### Verification Steps
+
+Always verify you only killed test processes:
+```bash
+# This should show NO results (test processes should be gone)
+ps aux | grep deno | grep -E "(8999|3999)"
+
+# This should still show the user's processes on 8000/3000 (if running)
+ps aux | grep deno | grep -E "(8000|3000)"
+```
+
 ## Known Issues and Considerations
 
 See `docs/STRANGE-AI.md` for notes on unusual design decisions made by previous AI agents.
@@ -381,7 +504,12 @@ Based on the codebase structure, potential areas for expansion:
 2. **Tunnel Management** - HTTP tunnel creation and routing
 3. **Authentication** - Client authentication and authorization
 4. **Admin API** - REST API for managing tunnels and clients
-5. **Web Dashboard** - Browser-based monitoring and management UI
+5. **Web Dashboard Enhancements** - Expand the existing dashboard with:
+   - Login/authentication UI
+   - Tunnel management interface (create, configure, delete tunnels)
+   - Real-time WebSocket updates (replace polling with push notifications)
+   - Settings page for client configuration
+   - Log viewer displaying client logs in the browser
 
 ## Best Practices for AI Agents
 

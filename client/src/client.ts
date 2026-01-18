@@ -1,6 +1,7 @@
 import { Logger, parseLogLevel } from "../../common/src/cli/logger.ts";
 import { loadConfig, ConfigSchema } from "../../common/src/config.ts";
 import { WebSocketEventHandler } from "./ws/events.ts";
+import { WebServer } from "./web/server.ts";
 
 // Define client configuration schema
 const clientSchema = {
@@ -13,6 +14,11 @@ const clientSchema = {
     reconnectMaxAttempts: { default: 0, description: "Maximum reconnection attempts (0 = infinite)" },
     reconnectBackoff: { default: true, description: "Use exponential backoff for reconnection" },
     reconnectMaxDelay: { default: 30000, description: "Maximum reconnection delay (ms)" },
+  },
+  web: {
+    enabled: { default: true, description: "Enable web dashboard server" },
+    host: { default: "127.0.0.1", description: "Web dashboard host address" },
+    port: { default: 3000, description: "Web dashboard port" },
   },
   log: {
     level: { 
@@ -43,6 +49,9 @@ class ReconnectingWebSocketClient {
   private reconnectAttempts = 0;
   private reconnectTimeoutId: number | null = null;
   private intentionalClose = false;
+  private clientId: string | null = null;
+  private lastConnected: Date | null = null;
+  private webServer: WebServer | null = null;
 
   constructor(
     private host: string,
@@ -69,6 +78,37 @@ class ReconnectingWebSocketClient {
   }
 
   /**
+   * Set web server instance for status updates
+   */
+  setWebServer(webServer: WebServer): void {
+    this.webServer = webServer;
+    this.updateWebServerStatus();
+  }
+
+  /**
+   * Update web server with current connection status
+   */
+  private updateWebServerStatus(): void {
+    if (this.webServer) {
+      this.webServer.updateConnectionStatus({
+        connected: this.ws?.readyState === WebSocket.OPEN,
+        clientId: this.clientId,
+        serverUrl: `ws://${this.host}:${this.port}`,
+        reconnectAttempts: this.reconnectAttempts,
+        lastConnected: this.lastConnected,
+      });
+    }
+  }
+
+  /**
+   * Set client ID (called when server assigns ID)
+   */
+  setClientId(id: string): void {
+    this.clientId = id;
+    this.updateWebServerStatus();
+  }
+
+  /**
    * Connect to the WebSocket server
    */
   connect(): void {
@@ -82,11 +122,17 @@ class ReconnectingWebSocketClient {
       this.logger.info(`Connecting to ${url}...`);
       this.ws = new WebSocket(url);
 
-      // Create event handler for this connection
-      this.events = new WebSocketEventHandler(this.ws, this.logger);
+      // Create event handler for this connection with client ID callback
+      this.events = new WebSocketEventHandler(
+        this.ws, 
+        this.logger,
+        (id: string) => this.setClientId(id)
+      );
 
       this.ws.onopen = () => {
         this.reconnectAttempts = 0; // Reset on successful connection
+        this.lastConnected = new Date();
+        this.updateWebServerStatus();
         if (this.events) {
           this.events.onOpen();
         }
@@ -121,6 +167,8 @@ class ReconnectingWebSocketClient {
    * Handle disconnection and attempt reconnection if enabled
    */
   private handleDisconnect(): void {
+    this.updateWebServerStatus();
+    
     // Clear any existing reconnection timeout
     if (this.reconnectTimeoutId !== null) {
       clearTimeout(this.reconnectTimeoutId);
@@ -148,6 +196,7 @@ class ReconnectingWebSocketClient {
     // Calculate delay and schedule reconnection
     const delay = this.getReconnectDelay();
     this.reconnectAttempts++;
+    this.updateWebServerStatus();
     
     const maxAttemptsDisplay = this.reconnectMaxAttempts > 0 
       ? this.reconnectMaxAttempts.toString() 
@@ -194,6 +243,15 @@ const client = new ReconnectingWebSocketClient(
   config.server.reconnectMaxDelay,
 );
 
+// Start web server if enabled
+let webServer: WebServer | null = null;
+if (config.web.enabled) {
+  const webLogger = new Logger("WEB", config.log.level);
+  webServer = new WebServer(config.web.host, config.web.port, webLogger);
+  webServer.start();
+  client.setWebServer(webServer);
+}
+
 // Initial delay before first connection
 await new Promise(resolve => setTimeout(resolve, config.server.reconnectDelay));
 
@@ -201,14 +259,20 @@ await new Promise(resolve => setTimeout(resolve, config.server.reconnectDelay));
 client.connect();
 
 // Handle process signals for graceful shutdown
-Deno.addSignalListener("SIGINT", () => {
+Deno.addSignalListener("SIGINT", async () => {
   logger.info("Received SIGINT, closing connection...");
   client.close();
+  if (webServer) {
+    await webServer.stop();
+  }
   Deno.exit(0);
 });
 
-Deno.addSignalListener("SIGTERM", () => {
+Deno.addSignalListener("SIGTERM", async () => {
   logger.info("Received SIGTERM, closing connection...");
   client.close();
+  if (webServer) {
+    await webServer.stop();
+  }
   Deno.exit(0);
 });

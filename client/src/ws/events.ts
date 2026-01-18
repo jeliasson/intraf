@@ -12,10 +12,12 @@ export class WebSocketEventHandler {
   private clientId: ClientId | null = null;
   private heartbeatContext: HeartbeatContext | null = null;
   private loginInProgress: boolean = false;
+  private onClientIdChange?: (id: ClientId) => void;
 
-  constructor(socket: WebSocket, logger: Logger) {
+  constructor(socket: WebSocket, logger: Logger, onClientIdChange?: (id: ClientId) => void) {
     this.socket = socket;
     this.logger = logger;
+    this.onClientIdChange = onClientIdChange;
   }
 
   onOpen(): void {
@@ -35,6 +37,11 @@ export class WebSocketEventHandler {
       logger: this.logger,
       context,
     }).then(() => {
+      // Check if client ID changed and notify
+      if (context.clientId && context.clientId !== this.clientId && this.onClientIdChange) {
+        this.onClientIdChange(context.clientId);
+      }
+      
       // Update our local references
       this.clientId = context.clientId;
       this.heartbeatContext = context.heartbeatContext;
