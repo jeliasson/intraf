@@ -1,10 +1,9 @@
 /**
- * Common types for WebSocket communication
- * 
- * This file re-exports from the types/ module for backward compatibility.
- * New code should import from 'common/src/types/index.ts' directly.
+ * Type definitions and type guards
+ * Central export point for all type-related functionality
  */
 
+// Export message types and interfaces
 export type {
   ClientId,
   BaseMessage,
@@ -15,10 +14,11 @@ export type {
   LoginRequestMessage,
   LoginResponseMessage,
   WebSocketMessage,
-} from "./types/index.ts";
+} from "./messages.ts";
 
-export { MessageType } from "./types/index.ts";
+export { MessageType } from "./messages.ts";
 
+// Export type guards
 export {
   isClientIdMessage,
   isAuthRequestMessage,
@@ -26,4 +26,4 @@ export {
   isAuthResultMessage,
   isLoginRequestMessage,
   isLoginResponseMessage,
-} from "./types/index.ts";
+} from "./guards.ts";
