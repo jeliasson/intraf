@@ -1,5 +1,6 @@
 import { Logger } from "../../../common/src/cli/logger.ts";
-import type { DashboardState } from "./types.ts";
+import type { DashboardState, StatusUpdateMessage, LogEntryMessage, WebDashboardMessageType } from "./types.ts";
+import { WebDashboardMessageType as MessageType } from "./types.ts";
 
 /**
  * Web server for client dashboard
@@ -7,6 +8,7 @@ import type { DashboardState } from "./types.ts";
 export class WebServer {
   private server: Deno.HttpServer | null = null;
   private state: DashboardState;
+  private wsConnections: Set<WebSocket> = new Set();
 
   constructor(
     private host: string,
@@ -33,6 +35,53 @@ export class WebServer {
       ...this.state.connectionStatus,
       ...status,
     };
+    
+    // Broadcast status update to all connected WebSocket clients
+    this.broadcastStatusUpdate();
+  }
+
+  /**
+   * Broadcast a log entry to all connected WebSocket clients
+   */
+  broadcastLogEntry(level: string, prefix: string, timestamp: string, message: string): void {
+    const logMessage: LogEntryMessage = {
+      type: MessageType.LOG_ENTRY,
+      timestamp,
+      level,
+      prefix,
+      message,
+    };
+    
+    this.broadcast(logMessage);
+  }
+
+  /**
+   * Broadcast status update to all connected WebSocket clients
+   */
+  private broadcastStatusUpdate(): void {
+    const statusMessage: StatusUpdateMessage = {
+      type: MessageType.STATUS_UPDATE,
+      status: this.state.connectionStatus,
+    };
+    
+    this.broadcast(statusMessage);
+  }
+
+  /**
+   * Broadcast a message to all connected WebSocket clients
+   */
+  private broadcast(message: object): void {
+    const data = JSON.stringify(message);
+    
+    this.wsConnections.forEach(ws => {
+      try {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(data);
+        }
+      } catch (error) {
+        this.logger.debug(`Failed to send message to WebSocket client: ${error}`);
+      }
+    });
   }
 
   /**
@@ -78,9 +127,23 @@ export class WebServer {
     const handler = (req: Request): Response => {
       const url = new URL(req.url);
 
+      // Route: WebSocket upgrade
+      if (url.pathname === "/ws") {
+        return this.handleWebSocket(req);
+      }
+
       // Route: Root - Dashboard
       if (url.pathname === "/") {
         return this.handleDashboard();
+      }
+
+      // Route: Static files
+      if (url.pathname === "/styles.css") {
+        return this.handleStaticFile("styles.css", "text/css");
+      }
+
+      if (url.pathname === "/app.js") {
+        return this.handleStaticFile("app.js", "application/javascript");
       }
 
       // Route: API - Status
@@ -101,246 +164,55 @@ export class WebServer {
   }
 
   /**
+   * Handle WebSocket upgrade request
+   */
+  private handleWebSocket(req: Request): Response {
+    const { socket, response } = Deno.upgradeWebSocket(req);
+    
+    socket.onopen = () => {
+      this.wsConnections.add(socket);
+      this.logger.debug(`Web dashboard client connected (${this.wsConnections.size} total)`);
+      
+      // Send initial status update to new client
+      this.broadcastStatusUpdate();
+    };
+    
+    socket.onclose = () => {
+      this.wsConnections.delete(socket);
+      this.logger.debug(`Web dashboard client disconnected (${this.wsConnections.size} remaining)`);
+    };
+    
+    socket.onerror = (error) => {
+      this.logger.debug(`Web dashboard WebSocket error: ${error}`);
+      this.wsConnections.delete(socket);
+    };
+    
+    return response;
+  }
+
+  /**
    * Handle dashboard page request
    */
   private handleDashboard(): Response {
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>intraf - Client Dashboard</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
-      padding: 2rem;
-      line-height: 1.6;
-    }
-    
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    
-    header {
-      margin-bottom: 3rem;
-      padding-bottom: 1rem;
-      border-bottom: 2px solid #1e293b;
-    }
-    
-    h1 {
-      font-size: 2.5rem;
-      color: #60a5fa;
-      margin-bottom: 0.5rem;
-    }
-    
-    .subtitle {
-      color: #94a3b8;
-      font-size: 1.1rem;
-    }
-    
-    .card {
-      background: #1e293b;
-      border-radius: 8px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-      border: 1px solid #334155;
-    }
-    
-    .card h2 {
-      color: #60a5fa;
-      margin-bottom: 1rem;
-      font-size: 1.5rem;
-    }
-    
-    .status-indicator {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      margin-right: 8px;
-      animation: pulse 2s ease-in-out infinite;
-    }
-    
-    .status-connected {
-      background: #10b981;
-    }
-    
-    .status-disconnected {
-      background: #ef4444;
-      animation: none;
-    }
-    
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-    
-    .info-grid {
-      display: grid;
-      gap: 1rem;
-    }
-    
-    .info-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 0.75rem;
-      background: #0f172a;
-      border-radius: 4px;
-    }
-    
-    .info-label {
-      color: #94a3b8;
-      font-weight: 500;
-    }
-    
-    .info-value {
-      color: #e2e8f0;
-      font-family: 'Courier New', monospace;
-    }
-    
-    .section {
-      margin-bottom: 2rem;
-    }
-    
-    .placeholder {
-      padding: 2rem;
-      text-align: center;
-      color: #64748b;
-      background: #0f172a;
-      border-radius: 4px;
-      border: 2px dashed #334155;
-    }
-    
-    .button {
-      background: #3b82f6;
-      color: white;
-      border: none;
-      padding: 0.75rem 1.5rem;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 1rem;
-      transition: background 0.2s;
-    }
-    
-    .button:hover {
-      background: #2563eb;
-    }
-    
-    .button:disabled {
-      background: #475569;
-      cursor: not-allowed;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header>
-      <h1>intraf</h1>
-      <p class="subtitle">Client Dashboard</p>
-    </header>
-    
-    <div class="section">
-      <div class="card">
-        <h2>Connection Status</h2>
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="info-label">Status</span>
-            <span class="info-value">
-              <span id="status-indicator" class="status-indicator"></span>
-              <span id="status-text">Loading...</span>
-            </span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Client ID</span>
-            <span class="info-value" id="client-id">-</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Server URL</span>
-            <span class="info-value" id="server-url">-</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Reconnect Attempts</span>
-            <span class="info-value" id="reconnect-attempts">-</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Last Connected</span>
-            <span class="info-value" id="last-connected">-</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <div class="section">
-      <div class="card">
-        <h2>Tunnels</h2>
-        <div class="placeholder">
-          <p>Tunnel management coming soon</p>
-          <p style="margin-top: 0.5rem; font-size: 0.9rem;">Create and configure HTTP tunnels to expose local services</p>
-        </div>
-      </div>
-    </div>
-    
-    <div class="section">
-      <div class="card">
-        <h2>Authentication</h2>
-        <div class="placeholder">
-          <p>Login system coming soon</p>
-          <p style="margin-top: 0.5rem; font-size: 0.9rem;">Secure your tunnels with authentication</p>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <script>
-    // Fetch and update status every 2 seconds
-    async function updateStatus() {
-      try {
-        const response = await fetch('/api/status');
-        const data = await response.json();
-        
-        const statusIndicator = document.getElementById('status-indicator');
-        const statusText = document.getElementById('status-text');
-        
-        if (data.connected) {
-          statusIndicator.className = 'status-indicator status-connected';
-          statusText.textContent = 'Connected';
-        } else {
-          statusIndicator.className = 'status-indicator status-disconnected';
-          statusText.textContent = 'Disconnected';
-        }
-        
-        document.getElementById('client-id').textContent = data.clientId || 'Not assigned';
-        document.getElementById('server-url').textContent = data.serverUrl || '-';
-        document.getElementById('reconnect-attempts').textContent = data.reconnectAttempts;
-        document.getElementById('last-connected').textContent = data.lastConnected 
-          ? new Date(data.lastConnected).toLocaleString() 
-          : 'Never';
-      } catch (error) {
-        console.error('Failed to fetch status:', error);
-      }
-    }
-    
-    // Initial update
-    updateStatus();
-    
-    // Update every 2 seconds
-    setInterval(updateStatus, 2000);
-  </script>
-</body>
-</html>`;
+    return this.handleStaticFile("index.html", "text/html; charset=utf-8");
+  }
 
-    return new Response(html, {
-      headers: { "Content-Type": "text/html; charset=utf-8" },
-    });
+  /**
+   * Handle static file request
+   */
+  private handleStaticFile(filename: string, contentType: string): Response {
+    try {
+      const publicDir = new URL("./public/", import.meta.url).pathname;
+      const filePath = `${publicDir}${filename}`;
+      const content = Deno.readTextFileSync(filePath);
+      
+      return new Response(content, {
+        headers: { "Content-Type": contentType },
+      });
+    } catch (error) {
+      this.logger.error(`Failed to read static file ${filename}: ${error}`);
+      return new Response("Internal Server Error", { status: 500 });
+    }
   }
 
   /**
@@ -365,6 +237,16 @@ export class WebServer {
    * Stop the web server
    */
   async stop(): Promise<void> {
+    // Close all WebSocket connections
+    this.wsConnections.forEach(ws => {
+      try {
+        ws.close();
+      } catch (error) {
+        // Ignore close errors
+      }
+    });
+    this.wsConnections.clear();
+    
     if (this.server) {
       await this.server.shutdown();
       this.logger.info("Web dashboard server stopped");

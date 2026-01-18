@@ -250,6 +250,13 @@ if (config.web.enabled) {
   webServer = new WebServer(config.web.host, config.web.port, webLogger);
   webServer.start();
   client.setWebServer(webServer);
+  
+  // Add logger hook to broadcast logs to web clients
+  Logger.addHook((level, levelName, prefix, timestamp, message) => {
+    if (webServer) {
+      webServer.broadcastLogEntry(levelName, prefix, timestamp, message);
+    }
+  });
 }
 
 // Initial delay before first connection

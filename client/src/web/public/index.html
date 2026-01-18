@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>intraf - Client Dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Intraf Tunnel Service</h1>
+    </header>
+    
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-bar-item">
+        <span class="status-bar-label">Status</span>
+        <span class="status-bar-value">
+          <span id="status-indicator" class="status-indicator"></span>
+          <span id="status-text">Loading...</span>
+        </span>
+      </div>
+      <div class="status-bar-item">
+        <span class="status-bar-label">Client ID</span>
+        <span class="status-bar-value" id="client-id">-</span>
+      </div>
+      <div class="status-bar-item">
+        <span class="status-bar-label">Server</span>
+        <span class="status-bar-value" id="server-url">-</span>
+      </div>
+      <div class="status-bar-item">
+        <span class="status-bar-label">Reconnects</span>
+        <span class="status-bar-value" id="reconnect-attempts">-</span>
+      </div>
+      <div class="status-bar-item">
+        <span class="status-bar-label">Last Connected</span>
+        <span class="status-bar-value" id="last-connected">-</span>
+      </div>
+    </div>
+    
+    <div class="section">
+      <div class="card">
+        <h2>Tunnels</h2>
+        <div class="placeholder">
+          <p>Tunnel management coming soon</p>
+          <p style="margin-top: 0.5rem; font-size: 0.9rem;">Create and configure HTTP tunnels to expose local services</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <div class="card">
+        <h2>Authentication</h2>
+        <div class="placeholder">
+          <p>Login system coming soon</p>
+          <p style="margin-top: 0.5rem; font-size: 0.9rem;">Secure your tunnels with authentication</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <div class="card">
+        <h2>Logs</h2>
+        <div class="logs-controls">
+          <button id="clear-logs" class="button button-small">Clear Logs</button>
+          <label class="checkbox-label">
+            <input type="checkbox" id="auto-scroll" checked>
+            Auto-scroll
+          </label>
+        </div>
+        <div id="logs-container" class="logs-container">
+          <div class="logs-placeholder">Connecting to log stream...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="/app.js"></script>
+</body>
+</html>
