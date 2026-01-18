@@ -7,6 +7,7 @@ import { MSG_CONNECTION_CLOSED_INTENTIONALLY } from "../../../common/src/constan
 import { ConnectionError, getErrorMessage } from "../../../common/src/errors/index.ts";
 import { WebSocketEventHandler } from "../ws/events.ts";
 import { WebServer } from "../web/server.ts";
+import { ConnectionStateMachine, ConnectionState, ConnectionEvent } from "./state.ts";
 
 export class ReconnectingWebSocketClient {
   private ws: WebSocket | null = null;
@@ -17,6 +18,7 @@ export class ReconnectingWebSocketClient {
   private clientId: string | null = null;
   private lastConnected: Date | null = null;
   private webServer: WebServer | null = null;
+  private stateMachine: ConnectionStateMachine;
 
   constructor(
     private host: string,
@@ -27,7 +29,14 @@ export class ReconnectingWebSocketClient {
     private reconnectMaxAttempts: number,
     private reconnectBackoff: boolean,
     private reconnectMaxDelay: number,
-  ) {}
+  ) {
+    this.stateMachine = new ConnectionStateMachine(logger);
+    
+    // Listen to state changes and update web server
+    this.stateMachine.addListener((state) => {
+      this.updateWebServerStatus();
+    });
+  }
 
   /**
    * Calculate reconnection delay with optional exponential backoff
@@ -56,11 +65,13 @@ export class ReconnectingWebSocketClient {
   private updateWebServerStatus(): void {
     if (this.webServer) {
       this.webServer.updateConnectionStatus({
-        connected: this.ws?.readyState === WebSocket.OPEN,
+        connected: this.stateMachine.isActive(),
         clientId: this.clientId,
         serverUrl: `ws://${this.host}:${this.port}`,
         reconnectAttempts: this.reconnectAttempts,
         lastConnected: this.lastConnected,
+        state: this.stateMachine.getState(),
+        stateDescription: this.stateMachine.getStateDescription(),
       });
     }
   }
@@ -70,6 +81,9 @@ export class ReconnectingWebSocketClient {
    */
   setClientId(id: string): void {
     this.clientId = id;
+    
+    // Transition to READY state when client ID is assigned
+    this.stateMachine.transition(ConnectionEvent.CLIENT_ID_ASSIGNED);
     this.updateWebServerStatus();
   }
 
@@ -77,10 +91,13 @@ export class ReconnectingWebSocketClient {
    * Connect to the WebSocket server
    */
   connect(): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.logger.warn("Already connected");
+    if (this.stateMachine.isActive()) {
+      this.logger.warn("Already connected or connecting");
       return;
     }
+
+    // Transition to CONNECTING state
+    this.stateMachine.transition(ConnectionEvent.CONNECT_REQUESTED);
 
     try {
       const url = `ws://${this.host}:${this.port}`;
@@ -97,6 +114,13 @@ export class ReconnectingWebSocketClient {
       this.ws.onopen = () => {
         this.reconnectAttempts = 0; // Reset on successful connection
         this.lastConnected = new Date();
+        
+        // Transition to CONNECTED state
+        this.stateMachine.transition(ConnectionEvent.CONNECTION_OPENED);
+        
+        // Immediately transition to AUTHENTICATED since auth is disabled
+        this.stateMachine.transition(ConnectionEvent.AUTH_COMPLETED);
+        
         this.updateWebServerStatus();
         if (this.events) {
           this.events.onOpen();
@@ -110,18 +134,34 @@ export class ReconnectingWebSocketClient {
       };
 
       this.ws.onerror = (err) => {
+        // Transition to DISCONNECTED on error
+        this.stateMachine.transition(ConnectionEvent.CONNECTION_ERROR);
+        
         if (this.events) {
           this.events.onError(err);
         }
       };
 
       this.ws.onclose = () => {
+        // Transition to DISCONNECTED state (only if not already disconnected)
+        // This handles the case where onerror already transitioned to DISCONNECTED
+        if (!this.stateMachine.is(ConnectionState.DISCONNECTED)) {
+          if (!this.intentionalClose) {
+            this.stateMachine.transition(ConnectionEvent.CONNECTION_CLOSED);
+          } else {
+            this.stateMachine.transition(ConnectionEvent.DISCONNECT_REQUESTED);
+          }
+        }
+        
         if (this.events) {
           this.events.onClose();
         }
         this.handleDisconnect();
       };
     } catch (error) {
+      // Transition to DISCONNECTED on connection failure
+      this.stateMachine.transition(ConnectionEvent.CONNECTION_ERROR);
+      
       const message = getErrorMessage(error);
       this.logger.error(`Connection error: ${message}`);
       this.handleDisconnect(error);
@@ -194,5 +234,54 @@ export class ReconnectingWebSocketClient {
       this.ws.close();
       this.ws = null;
     }
+    
+    // Reset state machine to DISCONNECTED
+    this.stateMachine.reset();
+  }
+  
+  /**
+   * Get current connection state
+   */
+  getState(): ConnectionState {
+    return this.stateMachine.getState();
+  }
+  
+  /**
+   * Check if connection is ready for operations
+   */
+  isReady(): boolean {
+    return this.stateMachine.isReady();
+  }
+  
+  /**
+   * Send message through WebSocket (only if ready)
+   * Returns true if message was sent, false otherwise
+   */
+  send(data: string | ArrayBufferLike | Blob | ArrayBufferView): boolean {
+    if (!this.stateMachine.isActive()) {
+      this.logger.warn("Cannot send message: connection not active");
+      return false;
+    }
+    
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.logger.warn("Cannot send message: WebSocket not open");
+      return false;
+    }
+    
+    try {
+      this.ws.send(data);
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to send message: ${getErrorMessage(error)}`);
+      return false;
+    }
+  }
+  
+  /**
+   * Get WebSocket instance (for event handlers)
+   * Use with caution - prefer using send() method
+   */
+  getSocket(): WebSocket | null {
+    return this.ws;
   }
 }

@@ -2,12 +2,16 @@
  * Web server types for the client dashboard
  */
 
+import type { ConnectionState } from "../connection/state.ts";
+
 export interface ConnectionStatus {
   connected: boolean;
   clientId: string | null;
   serverUrl: string;
   reconnectAttempts: number;
   lastConnected: Date | null;
+  state?: ConnectionState;
+  stateDescription?: string;
 }
 
 export interface DashboardState {

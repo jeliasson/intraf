@@ -140,6 +140,10 @@ h1 {
   background: #10b981;
 }
 
+.status-connecting {
+  background: #f59e0b;
+}
+
 .status-disconnected {
   background: #ef4444;
   animation: none;

@@ -7,6 +7,7 @@ const maxLogs = 1000; // Maximum number of log entries to keep
 // DOM elements
 const statusIndicator = document.getElementById('status-indicator');
 const statusText = document.getElementById('status-text');
+const connectionStateEl = document.getElementById('connection-state');
 const clientIdEl = document.getElementById('client-id');
 const serverUrlEl = document.getElementById('server-url');
 const reconnectAttemptsEl = document.getElementById('reconnect-attempts');
@@ -81,13 +82,23 @@ function handleWebSocketMessage(message) {
 
 // Update connection status display
 function updateStatus(status) {
-  if (status.connected) {
+  // Update main status indicator based on state or connected flag
+  const isReady = status.state === 'READY';
+  const isConnecting = status.state === 'CONNECTING';
+  
+  if (isReady) {
     statusIndicator.className = 'status-indicator status-connected';
-    statusText.textContent = 'Connected';
+    statusText.textContent = 'Ready';
+  } else if (status.connected || isConnecting) {
+    statusIndicator.className = 'status-indicator status-connecting';
+    statusText.textContent = status.stateDescription || 'Connecting...';
   } else {
     statusIndicator.className = 'status-indicator status-disconnected';
     statusText.textContent = 'Disconnected';
   }
+  
+  // Update detailed connection state
+  connectionStateEl.textContent = status.stateDescription || status.state || 'Unknown';
   
   clientIdEl.textContent = status.clientId || 'Not assigned';
   serverUrlEl.textContent = status.serverUrl || '-';
