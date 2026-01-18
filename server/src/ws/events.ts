@@ -6,6 +6,7 @@ import { handleClose } from "./events/close.ts";
 import { handleError } from "./events/error.ts";
 import type { HeartbeatContext } from "./heartbeat.ts";
 import { startHeartbeat } from "./heartbeat.ts";
+import type { ConnectionPool } from "../connection/pool.ts";
 
 export interface AuthContext {
   enabled: boolean;
@@ -19,16 +20,19 @@ export class WebSocketEventHandler {
   private clientId: ClientId;
   private heartbeatContext: HeartbeatContext;
   private authContext: AuthContext;
+  private pool: ConnectionPool;
 
   constructor(
     socket: WebSocket, 
     logger: Logger, 
     clientId: ClientId,
-    authConfig: { enabled: boolean; secret: string }
+    authConfig: { enabled: boolean; secret: string },
+    pool: ConnectionPool
   ) {
     this.socket = socket;
     this.logger = logger;
     this.clientId = clientId;
+    this.pool = pool;
     this.authContext = {
       enabled: authConfig.enabled,
       secret: authConfig.secret,

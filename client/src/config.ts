@@ -15,6 +15,7 @@ export const clientSchema = {
     reconnectMaxAttempts: { default: 0, description: "Maximum reconnection attempts (0 = infinite)" },
     reconnectBackoff: { default: true, description: "Use exponential backoff for reconnection" },
     reconnectMaxDelay: { default: 30000, description: "Maximum reconnection delay (ms)" },
+    connectionTimeout: { default: 10000, description: "Connection establishment timeout (ms)" },
   },
   web: {
     enabled: { default: true, description: "Enable web dashboard server" },

@@ -22,6 +22,8 @@ export function handleError({ err, logger }: ErrorHandlerParams): void {
       logger.debug("Connection closed by server");
     } else if (message.includes("Connection refused")) {
       logger.warn("Connection refused - server may be down");
+    } else if (message.includes("503") || message.includes("Service Unavailable")) {
+      logger.error("Server unavailable - may be at capacity or shutting down");
     } else {
       // Log other errors with just the message
       logger.error(`WebSocket error: ${message}`);

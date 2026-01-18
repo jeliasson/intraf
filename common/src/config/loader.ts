@@ -60,6 +60,13 @@ export class Config<S extends ConfigSchema> {
   }
 
   /**
+   * Convert camelCase to kebab-case
+   */
+  private toKebabCase(str: string): string {
+    return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+  }
+
+  /**
    * Convert section.field to SECTION_FIELD for env vars
    */
   private toEnvVar(section: string, field: string): string {
@@ -70,7 +77,7 @@ export class Config<S extends ConfigSchema> {
    * Convert section.field to --section-field for CLI args
    */
   private toCliArg(section: string, field: string): string {
-    return `--${section}-${field}`.toLowerCase();
+    return `--${this.toKebabCase(section)}-${this.toKebabCase(field)}`;
   }
 
   /**
@@ -124,7 +131,7 @@ export class Config<S extends ConfigSchema> {
       for (const [section, sectionDef] of Object.entries(this.schema)) {
         // Top-level field
         if ("default" in sectionDef) {
-          const cliArg = `--${section}`.toLowerCase();
+          const cliArg = `--${this.toKebabCase(section)}`;
           const cliArgEq = `${cliArg}=`;
           
           if (arg.startsWith(cliArgEq)) {

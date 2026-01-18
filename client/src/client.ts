@@ -30,6 +30,7 @@ const client = new ReconnectingWebSocketClient(
   config.server.reconnectMaxAttempts,
   config.server.reconnectBackoff,
   config.server.reconnectMaxDelay,
+  config.server.connectionTimeout,
 );
 
 // Start web server if enabled

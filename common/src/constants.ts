@@ -8,6 +8,7 @@
 export const HTTP_UPGRADE_REQUIRED = 426;
 export const HTTP_OK = 200;
 export const HTTP_UNAUTHORIZED = 401;
+export const HTTP_SERVICE_UNAVAILABLE = 503;
 
 /**
  * WebSocket Close Codes

@@ -9,6 +9,9 @@ export const serverSchema = {
   server: {
     host: { default: "0.0.0.0", description: "Server host address" },
     port: { default: 8000, description: "Server port" },
+    maxConnections: { default: 1000, description: "Maximum concurrent connections" },
+    maxConnectionsPerIp: { default: 2, description: "Maximum connections per IP address" },
+    idleTimeout: { default: 300000, description: "Idle connection timeout in milliseconds (5 minutes)" },
   },
   auth: {
     enabled: { default: false, description: "Enable JWT authentication" },

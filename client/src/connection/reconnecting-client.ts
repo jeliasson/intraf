@@ -14,6 +14,7 @@ export class ReconnectingWebSocketClient {
   private events: WebSocketEventHandler | null = null;
   private reconnectAttempts = 0;
   private reconnectTimeoutId: number | undefined = undefined;
+  private connectionTimeoutId: number | undefined = undefined;
   private intentionalClose = false;
   private clientId: string | null = null;
   private lastConnected: Date | null = null;
@@ -29,6 +30,7 @@ export class ReconnectingWebSocketClient {
     private reconnectMaxAttempts: number,
     private reconnectBackoff: boolean,
     private reconnectMaxDelay: number,
+    private connectionTimeout: number,
   ) {
     this.stateMachine = new ConnectionStateMachine(logger);
     
@@ -98,6 +100,21 @@ export class ReconnectingWebSocketClient {
 
     // Transition to CONNECTING state
     this.stateMachine.transition(ConnectionEvent.CONNECT_REQUESTED);
+    
+    // Track connection start time to detect immediate failures
+    const connectionStartTime = Date.now();
+
+    // Set connection timeout
+    this.connectionTimeoutId = setTimeout(() => {
+      if (this.stateMachine.is(ConnectionState.CONNECTING)) {
+        this.logger.error(`Connection timeout after ${this.connectionTimeout}ms`);
+        if (this.ws) {
+          this.ws.close();
+        }
+        this.stateMachine.transition(ConnectionEvent.CONNECTION_ERROR);
+        this.handleDisconnect(new Error("Connection timeout"));
+      }
+    }, this.connectionTimeout);
 
     try {
       const url = `ws://${this.host}:${this.port}`;
@@ -112,6 +129,12 @@ export class ReconnectingWebSocketClient {
       );
 
       this.ws.onopen = () => {
+        // Clear connection timeout
+        if (this.connectionTimeoutId !== undefined) {
+          clearTimeout(this.connectionTimeoutId);
+          this.connectionTimeoutId = undefined;
+        }
+
         this.reconnectAttempts = 0; // Reset on successful connection
         this.lastConnected = new Date();
         
@@ -134,15 +157,31 @@ export class ReconnectingWebSocketClient {
       };
 
       this.ws.onerror = (err) => {
+        // Clear connection timeout
+        if (this.connectionTimeoutId !== undefined) {
+          clearTimeout(this.connectionTimeoutId);
+          this.connectionTimeoutId = undefined;
+        }
+
         // Transition to DISCONNECTED on error
         this.stateMachine.transition(ConnectionEvent.CONNECTION_ERROR);
         
-        if (this.events) {
+        // Detect immediate failures (< 100ms) which are likely server rejections
+        const connectionDuration = Date.now() - connectionStartTime;
+        if (connectionDuration < 100 && this.reconnectAttempts > 0) {
+          this.logger.error("Server rejected connection - may be at capacity, shutting down, or per-IP limit reached");
+        } else if (this.events) {
           this.events.onError(err);
         }
       };
 
       this.ws.onclose = () => {
+        // Clear connection timeout
+        if (this.connectionTimeoutId !== undefined) {
+          clearTimeout(this.connectionTimeoutId);
+          this.connectionTimeoutId = undefined;
+        }
+
         // Transition to DISCONNECTED state (only if not already disconnected)
         // This handles the case where onerror already transitioned to DISCONNECTED
         if (!this.stateMachine.is(ConnectionState.DISCONNECTED)) {
@@ -174,10 +213,14 @@ export class ReconnectingWebSocketClient {
   private handleDisconnect(error?: unknown): void {
     this.updateWebServerStatus();
     
-    // Clear any existing reconnection timeout
+    // Clear any existing timeouts
     if (this.reconnectTimeoutId !== undefined) {
       clearTimeout(this.reconnectTimeoutId);
       this.reconnectTimeoutId = undefined;
+    }
+    if (this.connectionTimeoutId !== undefined) {
+      clearTimeout(this.connectionTimeoutId);
+      this.connectionTimeoutId = undefined;
     }
 
     // Don't reconnect if it was an intentional close
@@ -225,9 +268,14 @@ export class ReconnectingWebSocketClient {
   close(): void {
     this.intentionalClose = true;
     
+    // Clear all timeouts
     if (this.reconnectTimeoutId !== undefined) {
       clearTimeout(this.reconnectTimeoutId);
       this.reconnectTimeoutId = undefined;
+    }
+    if (this.connectionTimeoutId !== undefined) {
+      clearTimeout(this.connectionTimeoutId);
+      this.connectionTimeoutId = undefined;
     }
 
     if (this.ws) {
