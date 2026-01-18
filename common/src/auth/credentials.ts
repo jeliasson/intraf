@@ -5,6 +5,7 @@
 
 import { join } from "https://deno.land/std@0.221.0/path/mod.ts";
 import { ensureDir } from "https://deno.land/std@0.221.0/fs/mod.ts";
+import { Result, ok, err } from "../errors/index.ts";
 
 /**
  * Credentials structure stored in credentials.json
@@ -18,11 +19,11 @@ export interface Credentials {
  * Uses XDG_STATE_HOME on Linux, ~/Library/Application Support on macOS,
  * and LOCALAPPDATA on Windows
  */
-function getCredentialsDir(): string {
+function getCredentialsDir(): Result<string, Error> {
   const homeDir = Deno.env.get("HOME") || Deno.env.get("USERPROFILE");
   
   if (!homeDir) {
-    throw new Error("Unable to determine home directory");
+    return err(new Error("Unable to determine home directory"));
   }
 
   // Determine the appropriate base directory based on OS
@@ -40,14 +41,18 @@ function getCredentialsDir(): string {
     baseDir = xdgStateHome || join(homeDir, ".local", "state");
   }
 
-  return join(baseDir, "intraf");
+  return ok(join(baseDir, "intraf"));
 }
 
 /**
  * Get the full path to the credentials file
  */
 export function getCredentialsPath(): string {
-  return join(getCredentialsDir(), "credentials.json");
+  const dirResult = getCredentialsDir();
+  if (!dirResult.ok) {
+    throw dirResult.error;
+  }
+  return join(dirResult.value, "credentials.json");
 }
 
 /**
@@ -69,28 +74,43 @@ export async function loadCredentials(): Promise<Credentials | null> {
  * Save credentials to the credentials file
  * Creates directory if it doesn't exist
  */
-export async function saveCredentials(credentials: Credentials): Promise<void> {
-  const credDir = getCredentialsDir();
-  const credPath = getCredentialsPath();
-  
-  // Ensure directory exists
-  await ensureDir(credDir);
-  
-  // Write credentials
-  await Deno.writeTextFile(
-    credPath,
-    JSON.stringify(credentials, null, 2)
-  );
+export async function saveCredentials(credentials: Credentials): Promise<Result<void, Error>> {
+  try {
+    const dirResult = getCredentialsDir();
+    if (!dirResult.ok) {
+      return dirResult;
+    }
+
+    const credPath = join(dirResult.value, "credentials.json");
+    
+    // Ensure directory exists
+    await ensureDir(dirResult.value);
+    
+    // Write credentials
+    await Deno.writeTextFile(
+      credPath,
+      JSON.stringify(credentials, null, 2)
+    );
+
+    return ok(undefined);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
+  }
 }
 
 /**
  * Delete the credentials file
  */
-export async function deleteCredentials(): Promise<void> {
+export async function deleteCredentials(): Promise<Result<void, Error>> {
   try {
     const credPath = getCredentialsPath();
     await Deno.remove(credPath);
-  } catch {
+    return ok(undefined);
+  } catch (error) {
     // File doesn't exist - this is fine, nothing to delete
+    if (error instanceof Deno.errors.NotFound) {
+      return ok(undefined);
+    }
+    return err(error instanceof Error ? error : new Error(String(error)));
   }
 }

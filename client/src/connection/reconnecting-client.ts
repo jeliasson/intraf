@@ -4,6 +4,7 @@
 
 import { Logger } from "../../../common/src/cli/logger.ts";
 import { MSG_CONNECTION_CLOSED_INTENTIONALLY } from "../../../common/src/constants.ts";
+import { ConnectionError, getErrorMessage } from "../../../common/src/errors/index.ts";
 import { WebSocketEventHandler } from "../ws/events.ts";
 import { WebServer } from "../web/server.ts";
 
@@ -121,16 +122,16 @@ export class ReconnectingWebSocketClient {
         this.handleDisconnect();
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = getErrorMessage(error);
       this.logger.error(`Connection error: ${message}`);
-      this.handleDisconnect();
+      this.handleDisconnect(error);
     }
   }
 
   /**
    * Handle disconnection and attempt reconnection if enabled
    */
-  private handleDisconnect(): void {
+  private handleDisconnect(error?: unknown): void {
     this.updateWebServerStatus();
     
     // Clear any existing reconnection timeout
@@ -153,7 +154,8 @@ export class ReconnectingWebSocketClient {
 
     // Check if max attempts reached (0 means infinite)
     if (this.reconnectMaxAttempts > 0 && this.reconnectAttempts >= this.reconnectMaxAttempts) {
-      this.logger.error(`Maximum reconnection attempts (${this.reconnectMaxAttempts}) reached`);
+      const errorInfo = error ? ` (${getErrorMessage(error)})` : "";
+      this.logger.error(`Maximum reconnection attempts (${this.reconnectMaxAttempts}) reached${errorInfo}`);
       return;
     }
 
