@@ -18,6 +18,141 @@ This document provides AI agents with context about the **intraf** project archi
 - **Logging**: Custom logger with colored output and log levels
 - **Module System**: Deno's native ESM with JSR imports
 
+## Refactoring History
+
+The intraf project has undergone significant refactoring to improve code organization, maintainability, and production readiness. This section documents the major architectural improvements for context.
+
+### Phase 1-6: Foundation & Module Organization (Completed)
+
+**Objective:** Restructure the codebase into focused, maintainable modules organized by domain.
+
+**Key Improvements:**
+- **Constants Extraction**: Moved all magic numbers to `common/src/constants.ts`
+  - HTTP status codes (426, 200, 401, 503)
+  - WebSocket close codes (1000, 1001, 1008)
+  - Heartbeat intervals and timeouts
+  - Default message strings
+
+- **Domain-Driven Organization**: Reorganized `common/` into focused modules:
+  - `types/` - Message types, guards, and type definitions
+  - `config/` - Configuration loader, schema, and parser
+  - `errors/` - Error hierarchy and Result<T, E> pattern
+  - `auth/` - JWT utilities and credential management
+  - `websocket/` - WebSocket utilities (client ID generation)
+  - `cli/` - Logger and argument parsing
+
+- **Error Handling**: Implemented functional error handling with Result<T, E> pattern
+  - `IntrafError` base class with error codes
+  - Specialized errors: `ConfigError`, `ConnectionError`, `AuthError`, `ProtocolError`, `ValidationError`, `TimeoutError`
+  - Result utilities: `ok()`, `err()`, `map()`, `andThen()`, `tryCatch()`, etc.
+
+**Impact:** ~1,500+ lines removed, ~3,000+ lines reorganized, 15+ new focused modules
+
+### Phase 7: Client State Machine (Completed)
+
+**Objective:** Implement proper connection lifecycle management with state tracking.
+
+**Components:**
+- **State Machine** (`client/src/connection/state.ts`): 
+  - States: `DISCONNECTED → CONNECTING → CONNECTED → AUTHENTICATED → READY`
+  - Event-driven transitions with validation
+  - State query methods and change listeners
+  - Idempotent state transitions
+
+- **Client Integration** (`client/src/connection/reconnecting-client.ts`):
+  - Integrated state machine into WebSocket client
+  - Automatic state transitions on connection events
+  - State-based operation guards (e.g., `send()` only in READY state)
+  - Web dashboard integration for state visibility
+
+- **Web Dashboard Updates**:
+  - Real-time state display with colored indicators
+  - Connection state field shows current lifecycle stage
+  - Orange "connecting" status indicator
+
+**Benefits:**
+- Clear connection lifecycle visibility
+- Prevents operations in invalid states
+- Better debugging with state history
+- Foundation for future features (authentication flows, tunnel management)
+
+### Phase 8: Production Robustness (Completed)
+
+**Objective:** Add enterprise-grade resource management, limits, and graceful shutdown.
+
+**8.1 Server Connection Pool** (`server/src/connection/pool.ts`):
+- Tracks all active connections with metadata (clientId, socket, IP, timestamps)
+- **Global Limits**: Configurable max connections (default: 1000)
+- **Per-IP Limits**: Prevents single IP from monopolizing resources (default: 2)
+- **Rejection Handling**: Typed rejection reasons (POOL_FULL, IP_LIMIT_REACHED, DRAINING)
+- **Idle Detection**: Automatic cleanup of stale connections (default: 5 min)
+- **Graceful Close**: Safe connection termination with timeout
+- **Statistics**: Tracks total connected/disconnected, rejections, per-IP rejections
+
+**8.2 Server Integration** (`server/src/server.ts`):
+- IP extraction from headers (`x-forwarded-for`, `x-real-ip`)
+- Pre-upgrade rejection with specific HTTP 503 messages
+- Graceful shutdown handlers (SIGINT, SIGTERM):
+  - Drains pool (rejects new connections)
+  - Closes all active connections safely
+  - Logs shutdown progress
+- Periodic maintenance: idle cleanup, statistics logging
+
+**8.3 Connection Handler** (`server/src/connection/handler.ts`):
+- Passes client IP to connection pool
+- Updates activity timestamp on every message
+- Defensive error handling for pool failures
+
+**8.4 Client Connection Timeout** (`client/src/connection/reconnecting-client.ts`):
+- Configurable timeout for connection establishment (default: 10s)
+- Automatic cleanup and reconnection on timeout
+- Proper timeout clearing on success/error/close
+
+**8.5 Client Error Detection** (Fixed):
+- **Immediate Failure Detection**: Detects server rejections (< 100ms connection duration)
+- **Improved Messages**: "Server rejected connection - may be at capacity, shutting down, or per-IP limit reached"
+- **CLI Arg Fix**: Added `toKebabCase()` helper for proper camelCase→kebab-case conversion
+  - Now supports: `--server-max-connections`, `--server-max-connections-per-ip`
+
+**Configuration:**
+```typescript
+// Server
+server.maxConnections: 1000           // Global connection limit
+server.maxConnectionsPerIp: 2         // Per-IP connection limit
+server.idleTimeout: 300000            // 5 minutes
+server.connectionTimeout: 10000       // 10 seconds
+
+// Client
+server.connectionTimeout: 10000       // Connection establishment timeout
+```
+
+**Benefits:**
+- Prevents resource exhaustion attacks
+- Fair resource distribution (per-IP limits)
+- Clean shutdown without orphaned connections
+- Clear feedback to clients when rejected
+- Automatic cleanup of idle/stale connections
+
+**Testing Verified:**
+- ✅ Global capacity limits (max connections)
+- ✅ Per-IP limits (max connections per IP)
+- ✅ Graceful shutdown with connection draining
+- ✅ Client reconnection with exponential backoff
+- ✅ Connection timeout detection
+- ✅ Improved error messages on rejection
+
+### Architecture Summary
+
+The refactoring has transformed intraf from a basic WebSocket prototype into a production-ready tunneling service with:
+
+1. **Modular Architecture**: Domain-driven code organization with clear separation of concerns
+2. **Type Safety**: Comprehensive TypeScript types, guards, and error handling
+3. **State Management**: Proper connection lifecycle with state machine
+4. **Resource Management**: Connection pooling with limits and automatic cleanup
+5. **Graceful Operations**: Safe shutdown, connection draining, and timeout handling
+6. **Production Monitoring**: Statistics, logging, and clear error messages
+7. **Configuration Flexibility**: Schema-driven config with CLI args, env vars, and file support
+
 ## Project Structure
 
 ```
@@ -25,6 +160,10 @@ intraf/
 ├── server/           # WebSocket server
 │   ├── src/
 │   │   ├── server.ts              # Main server entry point
+│   │   ├── config.ts              # Server configuration schema
+│   │   ├── connection/            # Connection management (Phase 8)
+│   │   │   ├── pool.ts            # Connection pool with limits & tracking
+│   │   │   └── handler.ts         # Connection handler with activity tracking
 │   │   └── ws/                    # WebSocket event handlers
 │   │       ├── events.ts          # Event handler coordinator
 │   │       ├── heartbeat.ts       # Server-side heartbeat monitoring
@@ -39,9 +178,17 @@ intraf/
 ├── client/           # WebSocket client
 │   ├── src/
 │   │   ├── client.ts              # Main client entry point
+│   │   ├── config.ts              # Client configuration schema
+│   │   ├── connection/            # Connection management (Phase 7)
+│   │   │   ├── state.ts           # Connection state machine
+│   │   │   └── reconnecting-client.ts  # WebSocket client with reconnection
 │   │   ├── web/                   # Web dashboard server
 │   │   │   ├── server.ts          # HTTP server implementation
-│   │   │   └── types.ts           # Web server types
+│   │   │   ├── types.ts           # Web server types
+│   │   │   └── public/            # Static web assets
+│   │   │       ├── index.html     # Dashboard UI
+│   │   │       ├── app.js         # Dashboard logic
+│   │   │       └── styles.css     # Dashboard styles
 │   │   └── ws/                    # WebSocket event handlers
 │   │       ├── events.ts          # Event handler coordinator
 │   │       ├── heartbeat.ts       # Client-side heartbeat pinging
@@ -53,14 +200,34 @@ intraf/
 │   ├── intraf.yaml                # Client configuration
 │   └── deno.json                  # Deno configuration
 │
-├── common/           # Shared code
+├── common/           # Shared code (Phase 1-6: Refactored)
 │   ├── src/
-│   │   ├── types.ts               # Shared TypeScript types
-│   │   ├── config.ts              # Configuration system
-│   │   ├── websocket.ts           # WebSocket utilities & constants
+│   │   ├── constants.ts           # All magic numbers and constants
+│   │   ├── types/                 # Type definitions
+│   │   │   ├── index.ts           # Type exports
+│   │   │   ├── messages.ts        # WebSocket message types
+│   │   │   └── guards.ts          # Type guard functions
+│   │   ├── config/                # Configuration system
+│   │   │   ├── index.ts           # Config exports
+│   │   │   ├── schema.ts          # Schema types
+│   │   │   ├── loader.ts          # Config loader with precedence
+│   │   │   └── parser.ts          # YAML/value parsing
+│   │   ├── errors/                # Error handling (Result<T, E>)
+│   │   │   ├── index.ts           # Error exports
+│   │   │   ├── errors.ts          # Error hierarchy
+│   │   │   ├── result.ts          # Result type & utilities
+│   │   │   └── utils.ts           # Error utilities
+│   │   ├── auth/                  # Authentication (JWT)
+│   │   │   ├── index.ts           # Auth exports
+│   │   │   ├── jwt.ts             # JWT utilities
+│   │   │   └── credentials.ts     # Credential management
+│   │   ├── websocket/             # WebSocket utilities
+│   │   │   ├── index.ts           # WebSocket exports
+│   │   │   └── utils.ts           # Client ID generation
 │   │   └── cli/                   # CLI utilities
-│   │       ├── cli.ts             # CLI argument parsing
-│   │       └── logger.ts          # Logging system
+│   │       ├── index.ts           # CLI exports
+│   │       ├── logger.ts          # Logging system with hooks
+│   │       └── args.ts            # Argument parsing
 │   └── deno.json                  # Deno configuration
 │
 ├── docs/             # Documentation
@@ -342,16 +509,32 @@ deno task run   # Production run
 **Server:**
 - `--server-host` - Server host address (default: 0.0.0.0)
 - `--server-port` - Server port (default: 8000)
+- `--server-max-connections` - Maximum concurrent connections (default: 1000)
+- `--server-max-connections-per-ip` - Maximum connections per IP (default: 2)
+- `--server-idle-timeout` - Idle connection timeout in ms (default: 300000 = 5 min)
+- `--auth-enabled` - Enable JWT authentication (default: false)
+- `--auth-secret` - JWT secret key (default: "change-me-in-production")
 - `--log-level` - Log level (default: info)
 
 **Client:**
 - `--server-host` - Server host to connect to (default: 127.0.0.1)
 - `--server-port` - Server port to connect to (default: 8000)
 - `--server-reconnect-delay` - Initial connection delay in ms (default: 1000)
+- `--server-reconnect-enabled` - Enable automatic reconnection (default: true)
+- `--server-reconnect-interval` - Base reconnect interval in ms (default: 5000)
+- `--server-reconnect-max-attempts` - Max reconnect attempts, 0 = infinite (default: 0)
+- `--server-reconnect-backoff` - Enable exponential backoff (default: true)
+- `--server-reconnect-max-delay` - Maximum reconnect delay in ms (default: 30000)
+- `--server-connection-timeout` - Connection establishment timeout in ms (default: 10000)
 - `--web-enabled` - Enable web dashboard server (default: true)
 - `--web-host` - Web dashboard host address (default: 127.0.0.1)
 - `--web-port` - Web dashboard port (default: 3000)
 - `--log-level` - Log level (default: info)
+
+**Note:** Configuration uses camelCase in config files and kebab-case for CLI arguments. For example:
+- Config file: `server.maxConnections: 1000`
+- CLI argument: `--server-max-connections=1000`
+- Environment variable: `INTRAF_SERVER_MAX_CONNECTIONS=1000`
 
 ### Web Dashboard
 
@@ -492,9 +675,16 @@ ps aux | grep deno | grep -E "(8000|3000)"
 
 See `docs/STRANGE-AI.md` for notes on unusual design decisions made by previous AI agents.
 
-**Current notes:**
-1. Initial implementation had clients select their own names instead of server-assigned IDs
-2. Early config system hard-coded settings instead of using schema-driven approach
+**Resolved Issues:**
+1. ✅ Initial implementation had clients select their own names → Fixed: Server-assigned IDs
+2. ✅ Early config system hard-coded settings → Fixed: Schema-driven approach
+3. ✅ No connection lifecycle management → Fixed: State machine in Phase 7
+4. ✅ No resource limits or capacity management → Fixed: Connection pool in Phase 8
+5. ✅ Poor error messages on connection rejection → Fixed: Immediate failure detection
+6. ✅ CLI args didn't support camelCase→kebab-case → Fixed: `toKebabCase()` helper
+
+**Current Known Issues:**
+- LSP errors in unused TUI files (`client/src/console.ts`, `client/src/tui.ts`, `client/src/client-tui.ts`) - reference old auth message types, can be fixed or removed in future work
 
 ## Future Enhancements
 
