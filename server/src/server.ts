@@ -1,6 +1,7 @@
 import { generateClientId } from "../../common/src/websocket.ts";
 import { Logger, parseLogLevel } from "../../common/src/cli/logger.ts";
 import { loadConfig, ConfigSchema } from "../../common/src/config.ts";
+import { HTTP_UPGRADE_REQUIRED } from "../../common/src/constants.ts";
 import { WebSocketEventHandler } from "./ws/events.ts";
 
 // Define server configuration schema
@@ -44,7 +45,7 @@ Deno.serve({
   },
 }, (req) => {
   if (req.headers.get("upgrade") != "websocket") {
-    return new Response(null, { status: 426 });
+    return new Response(null, { status: HTTP_UPGRADE_REQUIRED });
   }
 
   const { socket, response } = Deno.upgradeWebSocket(req);

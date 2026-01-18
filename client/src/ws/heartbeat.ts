@@ -6,8 +6,8 @@ import {
 } from "../../../common/src/websocket.ts";
 
 export interface HeartbeatContext {
-  intervalId: number;
-  timeoutId: number;
+  intervalId: number | undefined;
+  timeoutId: number | undefined;
   awaitingPong: boolean;
 }
 
@@ -19,8 +19,8 @@ export function startHeartbeat(
   logger: Logger,
 ): HeartbeatContext {
   const context: HeartbeatContext = {
-    intervalId: 0,
-    timeoutId: 0,
+    intervalId: undefined,
+    timeoutId: undefined,
     awaitingPong: false,
   };
 
@@ -51,13 +51,13 @@ export function startHeartbeat(
  * Stop sending heartbeat pings
  */
 export function stopHeartbeat(context: HeartbeatContext): void {
-  if (context.intervalId) {
+  if (context.intervalId !== undefined) {
     clearInterval(context.intervalId);
-    context.intervalId = 0;
+    context.intervalId = undefined;
   }
-  if (context.timeoutId) {
+  if (context.timeoutId !== undefined) {
     clearTimeout(context.timeoutId);
-    context.timeoutId = 0;
+    context.timeoutId = undefined;
   }
 }
 
@@ -66,8 +66,8 @@ export function stopHeartbeat(context: HeartbeatContext): void {
  */
 export function resetHeartbeatTimeout(context: HeartbeatContext): void {
   context.awaitingPong = false;
-  if (context.timeoutId) {
+  if (context.timeoutId !== undefined) {
     clearTimeout(context.timeoutId);
-    context.timeoutId = 0;
+    context.timeoutId = undefined;
   }
 }

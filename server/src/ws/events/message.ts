@@ -125,6 +125,6 @@ export async function handleMessage({
       return;
     }
   } catch {
-    // Not JSON or parsing failed, ignore
+    // Not JSON or parsing failed - this is expected for non-JSON messages (like ping)
   }
 }

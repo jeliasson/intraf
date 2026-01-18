@@ -45,7 +45,6 @@ export async function handleMessage({
       context.clientId = data.id;
       logger.info(`Assigned Client ID: ${context.clientId}`);
       // Start heartbeat after receiving ID
-      socket.send("Hello from Deno!");
       context.heartbeatContext = startHeartbeat(socket, logger);
       return;
     }
@@ -142,7 +141,7 @@ export async function handleMessage({
       return;
     }
   } catch {
-    // Not JSON, handle as regular message
+    // Not JSON or parsing failed - this is expected for non-JSON messages (like pong)
   }
   
   logger.info("Received:", event.data);

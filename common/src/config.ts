@@ -88,6 +88,7 @@ export class Config<S extends ConfigSchema> {
       this.sources.push({ name: "Config file", data: configData });
       this.logger?.debug(`Loaded config from ${this.configPath}`);
     } catch (error) {
+      // Config file not found is expected - use defaults and other sources
       if (error instanceof Deno.errors.NotFound) {
         this.logger?.warn(`Config file not found: ${this.configPath}`);
       } else {

@@ -1,20 +1,19 @@
 import { MessageType, type ClientId } from "./types.ts";
+import {
+  HEARTBEAT_INTERVAL as HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_TIMEOUT as HEARTBEAT_TIMEOUT_MS,
+  HEARTBEAT_CHECK_INTERVAL as HEARTBEAT_CHECK_INTERVAL_MS,
+  SERVER_HEARTBEAT_TIMEOUT as SERVER_HEARTBEAT_TIMEOUT_MS,
+} from "./constants.ts";
 
 /**
  * WebSocket heartbeat configuration constants
+ * Re-exported from constants.ts for backward compatibility
  */
-
-// Client heartbeat interval - how often the client sends a ping
-export const HEARTBEAT_INTERVAL = 5000;
-
-// Client heartbeat timeout - how long to wait for a pong response
-export const HEARTBEAT_TIMEOUT = 3000;
-
-// Server heartbeat check interval - how often the server checks for stale connections
-export const HEARTBEAT_CHECK_INTERVAL = 10000;
-
-// Server heartbeat timeout - how long before considering a client connection stale
-export const SERVER_HEARTBEAT_TIMEOUT = 30000;
+export const HEARTBEAT_INTERVAL = HEARTBEAT_INTERVAL_MS;
+export const HEARTBEAT_TIMEOUT = HEARTBEAT_TIMEOUT_MS;
+export const HEARTBEAT_CHECK_INTERVAL = HEARTBEAT_CHECK_INTERVAL_MS;
+export const SERVER_HEARTBEAT_TIMEOUT = SERVER_HEARTBEAT_TIMEOUT_MS;
 
 // Heartbeat message constants - use MessageType enum values
 export const HEARTBEAT_PING = MessageType.HEARTBEAT_PING;

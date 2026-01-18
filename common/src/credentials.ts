@@ -60,6 +60,7 @@ export async function loadCredentials(): Promise<Credentials | null> {
     const content = await Deno.readTextFile(credPath);
     return JSON.parse(content) as Credentials;
   } catch {
+    // File doesn't exist or invalid JSON - this is expected for first run
     return null;
   }
 }
@@ -90,6 +91,6 @@ export async function deleteCredentials(): Promise<void> {
     const credPath = getCredentialsPath();
     await Deno.remove(credPath);
   } catch {
-    // File doesn't exist, that's fine
+    // File doesn't exist - this is fine, nothing to delete
   }
 }

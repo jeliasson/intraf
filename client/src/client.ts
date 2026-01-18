@@ -1,5 +1,6 @@
 import { Logger, parseLogLevel } from "../../common/src/cli/logger.ts";
 import { loadConfig, ConfigSchema } from "../../common/src/config.ts";
+import { MSG_CONNECTION_CLOSED_INTENTIONALLY } from "../../common/src/constants.ts";
 import { WebSocketEventHandler } from "./ws/events.ts";
 import { WebServer } from "./web/server.ts";
 
@@ -47,7 +48,7 @@ class ReconnectingWebSocketClient {
   private ws: WebSocket | null = null;
   private events: WebSocketEventHandler | null = null;
   private reconnectAttempts = 0;
-  private reconnectTimeoutId: number | null = null;
+  private reconnectTimeoutId: number | undefined = undefined;
   private intentionalClose = false;
   private clientId: string | null = null;
   private lastConnected: Date | null = null;
@@ -170,14 +171,14 @@ class ReconnectingWebSocketClient {
     this.updateWebServerStatus();
     
     // Clear any existing reconnection timeout
-    if (this.reconnectTimeoutId !== null) {
+    if (this.reconnectTimeoutId !== undefined) {
       clearTimeout(this.reconnectTimeoutId);
-      this.reconnectTimeoutId = null;
+      this.reconnectTimeoutId = undefined;
     }
 
     // Don't reconnect if it was an intentional close
     if (this.intentionalClose) {
-      this.logger.info("Connection closed intentionally");
+      this.logger.info(MSG_CONNECTION_CLOSED_INTENTIONALLY);
       return;
     }
 
@@ -219,9 +220,9 @@ class ReconnectingWebSocketClient {
   close(): void {
     this.intentionalClose = true;
     
-    if (this.reconnectTimeoutId !== null) {
+    if (this.reconnectTimeoutId !== undefined) {
       clearTimeout(this.reconnectTimeoutId);
-      this.reconnectTimeoutId = null;
+      this.reconnectTimeoutId = undefined;
     }
 
     if (this.ws) {

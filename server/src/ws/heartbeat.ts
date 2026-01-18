@@ -6,7 +6,7 @@ import {
 
 export interface HeartbeatContext {
   lastHeartbeat: number;
-  intervalId: number;
+  intervalId: number | undefined;
 }
 
 /**
@@ -18,7 +18,7 @@ export function startHeartbeat(
 ): HeartbeatContext {
   const context: HeartbeatContext = {
     lastHeartbeat: Date.now(),
-    intervalId: 0,
+    intervalId: undefined,
   };
 
   context.intervalId = setInterval(() => {
@@ -37,9 +37,9 @@ export function startHeartbeat(
  * Stop monitoring heartbeat
  */
 export function stopHeartbeat(context: HeartbeatContext): void {
-  if (context.intervalId) {
+  if (context.intervalId !== undefined) {
     clearInterval(context.intervalId);
-    context.intervalId = 0;
+    context.intervalId = undefined;
   }
 }
 
